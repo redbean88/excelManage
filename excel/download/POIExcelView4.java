@@ -1,15 +1,18 @@
 package egovframework.com.excel.download;
 
+import java.io.BufferedReader;
 import java.lang.reflect.Field;
+import java.net.URLEncoder;
+import java.sql.Clob;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.commons.collections.map.HashedMap;
 import org.apache.poi.hssf.util.HSSFColor;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Font;
@@ -20,37 +23,84 @@ import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.web.servlet.view.AbstractView;
 
 import egovframework.com.excel.utils.ExcelColumn;
-import egovframework.rte.fdl.excel.util.AbstractPOIExcelView;
 import egovframework.rte.psl.dataaccess.util.EgovMap;
 
-public class POIExcelView4 extends AbstractPOIExcelView {
+public class POIExcelView4 extends AbstractView {
+	
+	 /** The content type for an Excel response */
+    private static final String CONTENT_TYPE_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+	/**
+	 * 파일명 렌더러
+	 */
+	@Override
+	protected void renderMergedOutputModel(Map<String, Object> model,
+			HttpServletRequest request, HttpServletResponse response)
+			throws Exception {
+		
+		 XSSFWorkbook workbook = new XSSFWorkbook();
+
+	        setContentType(CONTENT_TYPE_XLSX);
+
+	        buildExcelDocument(model, workbook, request, response);
+	        
+	        // Set the filename
+	        String sFilename = "";
+	        if(model.get("filename") != null){
+	            sFilename = (String)model.get("filename");
+	        }else if(request.getAttribute("filename") != null){
+	            sFilename = (String)request.getAttribute("filename");
+	        }else{
+	            sFilename = "통계";
+	         }
+
+	        response.setContentType(getContentType());
+	        
+	        String header = request.getHeader("User-Agent");
+	        sFilename = sFilename.replaceAll("\r","").replaceAll("\n","");
+	        if(header.contains("MSIE") || header.contains("Trident") || header.contains("Chrome")){
+	            sFilename = URLEncoder.encode(sFilename,"UTF-8").replaceAll("\\+","%20");
+	            response.setHeader("Content-Disposition","attachment;filename="+sFilename+".xlsx;");
+	        }else{
+	            sFilename = new String(sFilename.getBytes("UTF-8"),"ISO-8859-1");
+	            response.setHeader("Content-Disposition","attachment;filename=\""+sFilename + ".xlsx\"");
+	        }
+	        
+	        // Flush byte array to servlet output stream.
+	        ServletOutputStream out = response.getOutputStream();
+	        out.flush();
+	        workbook.write(out);
+	        out.flush();
+		
+	}    
 	/**
 	 * TODO create mutil sheet option need
 	 */
 	@SuppressWarnings("unchecked")
 	protected void buildExcelDocument(Map model, XSSFWorkbook wb, HttpServletRequest req, HttpServletResponse resp) throws Exception {
- 
-        List<String> sheetNm = (List<String>) model.get("sheetNm"); // 엑셀 시트 이름
-        List<String> columnVarArr = getColumnVarArr(model.get("targetVO"));// 각 컬럼의 변수 이름
-        List<String> columnArr =  (List<String>) model.get("header"); // 각 컬럼 이름
-        List<EgovMap> dataList = (List<EgovMap>) model.get("body"); // 데이터가 담긴 리스트 
-        
-        CellStyle cellStyle = headerStyler(wb);
-        CellStyle cellStyle2 = bodyStyler(wb);
-        
-        for (int i = 0; i < sheetNm.size(); i++) {
-        	XSSFSheet sheet = wb.createSheet(sheetNm.get(i));
-        	sheet.setDefaultColumnWidth(12);
-        	
-        	processHeader(columnArr, dataList, cellStyle, cellStyle2, sheet);
-        	processBody(columnVarArr, columnArr, dataList, cellStyle2, sheet);
-		}
+			List<String> sheetNm = (List<String>) model.get("sheetNm"); // 엑셀 시트 이름
+			List<String> columnVarArr = getColumnVarArr(model.get("targetVO"));// 각 컬럼의 변수 이름
+			List<String> columnArr =  (List<String>) model.get("header"); // 각 컬럼 이름
+			List<EgovMap> dataList = (List<EgovMap>) model.get("body"); // 데이터가 담긴 리스트 
+			
+			CellStyle cellStyle = headerStyler(wb);
+			CellStyle cellStyle2 = bodyStyler(wb);
+			
+			for (int i = 0; i < sheetNm.size(); i++) {
+				XSSFSheet sheet = wb.createSheet(sheetNm.get(i));
+				sheet.setDefaultColumnWidth(12);
+				
+				processHeader(columnArr, dataList, cellStyle, cellStyle2, sheet);
+				processBody(columnVarArr, columnArr, dataList, cellStyle2, sheet);
+			}
+			
     }
 	
-	
+
+
 	/**
 	 * Convenient method to set header.
 	 * @param columnArr
@@ -85,8 +135,9 @@ public class POIExcelView4 extends AbstractPOIExcelView {
 	 * @param dataList
 	 * @param cellStyle2
 	 * @param sheet
+	 * @throws Exception 
 	 */
-	private void processBody(List<String> columnVarArr, List<String> columnArr,	List<EgovMap> dataList, CellStyle cellStyle2, XSSFSheet sheet) {
+	private void processBody(List<String> columnVarArr, List<String> columnArr,	List<EgovMap> dataList, CellStyle cellStyle2, XSSFSheet sheet) throws Exception {
 		XSSFCell cell;
 		if(dataList.size() > 0){ // 저장된 데이터가 있을때
             // 리스트 데이터 삽입
@@ -98,7 +149,7 @@ public class POIExcelView4 extends AbstractPOIExcelView {
                 
                 for(int j=0; j<columnVarArr.size(); j++){
                 	if(j >= columnArr.size() ) break;	//제목이 없는값은 미표시
-                    String data = (String) dataEgovMap.get(columnVarArr.get(j));
+                    String data = dataParsing2String(dataEgovMap.get(columnVarArr.get(j)));
                     cell = getCell(sheet, 1 + i, j);
                     setText(cell, data);
                     cell.setCellStyle(cellStyle2);
@@ -108,6 +159,35 @@ public class POIExcelView4 extends AbstractPOIExcelView {
             // 셀 병합(시작열, 종료열, 시작행, 종료행)
             sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, columnArr.size()-1));
         }
+	}
+	
+	/**
+	 * string 외의 타입을 string 타입으로 파싱한다
+	 * @param object
+	 * @return
+	 */
+	private String dataParsing2String(Object object) throws Exception {
+		if(object instanceof java.sql.Clob){
+			return clob2String((java.sql.Clob)object);
+		}else{
+			return object != null ? object.toString() : "";
+		}
+	}
+
+	/**
+	 * clob > String
+	 * @param object
+	 * @return
+	 * @throws Exception 
+	 */
+	private String clob2String(Clob clob) throws Exception {
+		StringBuffer strOut = new StringBuffer();
+		String str = "";
+		BufferedReader br = new BufferedReader(clob.getCharacterStream());
+		while ((str = br.readLine()) != null) {
+			strOut.append(str);
+		}
+		return strOut.toString();
 	}
 	/**
 	 * Convenient method to get ColumnVarArr using reflection.
@@ -210,6 +290,8 @@ public class POIExcelView4 extends AbstractPOIExcelView {
     protected void setText(XSSFCell cell, String text) {
         cell.setCellType(XSSFCell.CELL_TYPE_STRING);
         cell.setCellValue(text);
-    }    
+    }
+
+
 
 }
