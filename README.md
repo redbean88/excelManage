@@ -54,6 +54,7 @@ public class ContractMngVO {
   |:--:|:--:|
   |ExcelColumn(order=[num])| 엑셀 출력 대상 어노테이션 ( order : 출력 행 번호)|
   
+  # 다운로드
   + 컨트롤러
   ```
   @RequestMapping(value="/projectmng/contract/excelList.do")
@@ -94,6 +95,27 @@ public class ContractMngVO {
   |body| 엑셀 출력 대상 객체 리스트|
   | new ModelAndView(new POIExcelView4(), model);| 실체 엑셀 출력 |
   
-  
+  ```
+  @RequestMapping(value="/commserviceBaseInfo/upload.do")
+	@ResponseBody
+	public String excelupload(@RequestParam(value="serviceCode", required = false) String serviceCode ,ModelMap model , HttpServletRequest request,HttpServletResponse response) throws Exception{
+		
+		List<List<List<?>>> uploadData = excelService.getExcelData(request);
+		
+		int result = 0;
+		
+		//시트별
+		for (List<List<?>> lists : uploadData) {
+			//행별
+			 for (List<?> list : lists) {
+					CommServiceVO commServiceVO = new CommServiceVO();
+					commServiceVO.setServiceCode(serviceCode);
+				 commserviceBaseInfoService.insertCommserviceBaseInfo((CommServiceVO) ExcelParser.List2Target(list , commServiceVO));
+			     result++;
+			}
+		}
+		return String.valueOf(result);
+	}
+```
   
   
