@@ -54,6 +54,13 @@ public class ContractMngVO {
   |:--:|:--:|
   |ExcelColumn(order=[num])| 엑셀 출력 대상 어노테이션 ( order : 출력 행 번호)|
   
+  # 서비스 추가
+  ```
+     /** 엑셀 서비스 */
+	@Resource(name = "excelService")
+    private ExcelService excelService;
+   ```
+  
   # 다운로드
   + 컨트롤러
   ```
